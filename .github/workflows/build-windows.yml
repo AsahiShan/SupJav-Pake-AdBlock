@@ -135,15 +135,38 @@ jobs:
             throw "SupJav.exe was not produced."
           }
 
-          $msi = Get-ChildItem -Path . -Filter "SupJav_*.msi" -File |
-            Select-Object -First 1
-          if (-not $msi) {
-            throw "No SupJav_*.msi installer was produced."
+          # Pake CLI copies the installer to pake\SupJav.msi.
+          # Tauri also keeps the versioned MSI under src-tauri\target\...\bundle\msi.
+          # The previous root-only SupJav_*.msi search missed both output locations.
+          $msi = $null
+          $directMsi = Join-Path (Get-Location) "SupJav.msi"
+          if (Test-Path -LiteralPath $directMsi -PathType Leaf) {
+            $msi = Get-Item -LiteralPath $directMsi
           }
 
+          if (-not $msi) {
+            $bundleMsiDir = Join-Path (Get-Location) "src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi"
+            if (Test-Path -LiteralPath $bundleMsiDir -PathType Container) {
+              $msi = Get-ChildItem -LiteralPath $bundleMsiDir -Filter "SupJav_*.msi" -File |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 1
+            }
+          }
+
+          if (-not $msi) {
+            Write-Host "Searched for MSI at:"
+            Write-Host "  $directMsi"
+            Write-Host "  $(Join-Path (Get-Location) 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle\msi\SupJav_*.msi')"
+            throw "Build succeeded, but no SupJav MSI could be found."
+          }
+
+          if ($msi.Length -le 0) {
+            throw "The MSI file exists but is empty: $($msi.FullName)"
+          }
+
+          Write-Host "Using MSI: $($msi.FullName) ($([math]::Round($msi.Length / 1MB, 2)) MiB)"
           $msiOutput = Join-Path (Get-Location) "SupJav-Windows-x64.msi"
           Copy-Item -LiteralPath $msi.FullName -Destination $msiOutput -Force
-
           Write-Host "Build outputs:"
           Get-Item $exe, $msiOutput | Select-Object Name, Length | Format-Table -AutoSize
           Get-FileHash $exe -Algorithm SHA256
