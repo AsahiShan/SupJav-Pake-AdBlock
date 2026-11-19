@@ -1,0 +1,6 @@
+# Local Pake checkout and build output
+pake/
+output/
+*.msi
+*.exe
+build-result.json

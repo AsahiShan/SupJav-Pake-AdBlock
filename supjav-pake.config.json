@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tw93/Pake/1382507e007bb4b2e808971aacbe843b9bd220aa/schema/pake.schema.json",
+  "url": "https://supjav.com/zh/",
+  "name": "SupJav",
+  "title": "SupJav",
+  "identifier": "com.asahishan.supjav",
+  "appVersion": "1.0.0",
+  "targets": "x64",
+  "width": 1280,
+  "height": 820,
+  "newWindow": true,
+  "hideOnClose": false,
+  "restoreLastUrl": true,
+  "incognito": false,
+  "keepBinary": true,
+  "installerLanguage": "zh-CN",
+  "showSystemTray": false,
+  "passwordAutosave": false,
+  "zoom": 100
+}
