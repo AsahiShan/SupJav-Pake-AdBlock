@@ -52,30 +52,55 @@ jobs:
           toolchain: stable-x86_64-msvc
           target: x86_64-pc-windows-msvc
 
-      - name: Install WiX Toolset 3.11.2
+      - name: Use existing WiX Toolset or install it
         shell: pwsh
         run: |
-          choco install wixtoolset --version=3.11.2 --yes --no-progress
-          if ($LASTEXITCODE -ne 0) {
-            throw "Chocolatey could not install WiX Toolset 3.11.2 (exit code $LASTEXITCODE)."
-          }
-
           $searchRoots = @(
             "${env:ProgramFiles(x86)}",
             "$env:ProgramFiles",
-            "C:\ProgramData\chocolatey"
-          ) | Where-Object { Test-Path $_ }
+            "C:\ProgramData\chocolatey\lib\wixtoolset",
+            "C:\ProgramData\chocolatey\bin"
+          ) | Where-Object { $_ -and (Test-Path $_) }
 
-          $candle = Get-ChildItem -Path $searchRoots -Filter "candle.exe" -File -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
+          function Find-WixBin {
+            $candleCommand = Get-Command candle.exe -ErrorAction SilentlyContinue
+            if ($candleCommand) {
+              $candidate = Split-Path -Parent $candleCommand.Source
+              if (Test-Path (Join-Path $candidate "light.exe")) { return $candidate }
+            }
 
-          if (-not $candle) {
-            throw "WiX installation completed but candle.exe could not be located."
+            $candle = Get-ChildItem -Path $searchRoots -Filter "candle.exe" -File -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+
+            if ($candle) {
+              $candidate = Split-Path -Parent $candle.FullName
+              if (Test-Path (Join-Path $candidate "light.exe")) { return $candidate }
+            }
+
+            return $null
           }
 
-          $wixBin = Split-Path -Parent $candle.FullName
-          if (-not (Test-Path (Join-Path $wixBin "light.exe"))) {
-            throw "WiX light.exe is missing from $wixBin."
+          $wixBin = Find-WixBin
+
+          if (-not $wixBin) {
+            Write-Host "WiX was not found; installing the current Chocolatey wixtoolset package."
+            choco install wixtoolset --yes --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "Chocolatey could not install WiX Toolset (exit code $LASTEXITCODE)."
+            }
+
+            $searchRoots = @(
+              "${env:ProgramFiles(x86)}",
+              "$env:ProgramFiles",
+              "C:\ProgramData\chocolatey\lib\wixtoolset",
+              "C:\ProgramData\chocolatey\bin"
+            ) | Where-Object { $_ -and (Test-Path $_) }
+
+            $wixBin = Find-WixBin
+          }
+
+          if (-not $wixBin) {
+            throw "WiX candle.exe and light.exe could not be located after checking installed tools and Chocolatey."
           }
 
           Write-Host "Using WiX tools from: $wixBin"
