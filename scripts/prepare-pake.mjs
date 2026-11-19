@@ -47,3 +47,17 @@ await patchOnce(
   ].join('\n'),
   'enable SupJav filter groups',
 );
+
+await patchOnce(
+  'bin/utils/build-workspace.ts',
+  "    const sourceTauri = path.join(sourceDirectory, 'src-tauri');",
+  [
+    "    const sourceFilters = path.join(sourceDirectory, 'filters');",
+    '    if (await fs.pathExists(sourceFilters)) {',
+    "      await fs.copy(sourceFilters, path.join(directory, 'filters'));",
+    '    }',
+    '',
+    "    const sourceTauri = path.join(sourceDirectory, 'src-tauri');",
+  ].join('\n'),
+  'include bundled filter lists in the isolated build workspace',
+);
