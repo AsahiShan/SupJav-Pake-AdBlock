@@ -52,27 +52,34 @@ jobs:
           toolchain: stable-x86_64-msvc
           target: x86_64-pc-windows-msvc
 
-      - name: Cache WiX Toolset
-        uses: actions/cache@v4
-        id: wix-cache
-        with:
-          path: C:\Program Files (x86)\WiX Toolset v3.11
-          key: windows-wix-3.11.2
-
-      - name: Install WiX Toolset
-        if: steps.wix-cache.outputs.cache-hit != 'true'
-        shell: powershell
+      - name: Install WiX Toolset 3.11.2
+        shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe" -OutFile "$env:RUNNER_TEMP\wix311.exe"
-          $installer = Start-Process -FilePath "$env:RUNNER_TEMP\wix311.exe" -ArgumentList "/quiet" -Wait -PassThru
-          if ($installer.ExitCode -ne 0) { throw "WiX installer failed with exit code $($installer.ExitCode)" }
+          choco install wixtoolset --version=3.11.2 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) {
+            throw "Chocolatey could not install WiX Toolset 3.11.2 (exit code $LASTEXITCODE)."
+          }
 
-      - name: Add WiX to PATH
-        shell: powershell
-        run: |
-          $wixPath = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
-          if (-not (Test-Path $wixPath)) { throw "WiX not found at $wixPath" }
-          $wixPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $searchRoots = @(
+            "${env:ProgramFiles(x86)}",
+            "$env:ProgramFiles",
+            "C:\ProgramData\chocolatey"
+          ) | Where-Object { Test-Path $_ }
+
+          $candle = Get-ChildItem -Path $searchRoots -Filter "candle.exe" -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+
+          if (-not $candle) {
+            throw "WiX installation completed but candle.exe could not be located."
+          }
+
+          $wixBin = Split-Path -Parent $candle.FullName
+          if (-not (Test-Path (Join-Path $wixBin "light.exe"))) {
+            throw "WiX light.exe is missing from $wixBin."
+          }
+
+          Write-Host "Using WiX tools from: $wixBin"
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
@@ -97,10 +104,25 @@ jobs:
         shell: pwsh
         run: |
           node dist/cli.js --config ../supjav-pake.config.json
-          if (-not (Test-Path "SupJav.exe")) { throw "SupJav.exe was not produced" }
-          if (-not (Test-Path "SupJav.msi")) { throw "SupJav.msi was not produced" }
-          Get-FileHash "SupJav.exe" -Algorithm SHA256
-          Get-FileHash "SupJav.msi" -Algorithm SHA256
+
+          $exe = Join-Path (Get-Location) "SupJav.exe"
+          if (-not (Test-Path $exe)) {
+            throw "SupJav.exe was not produced."
+          }
+
+          $msi = Get-ChildItem -Path . -Filter "SupJav_*.msi" -File |
+            Select-Object -First 1
+          if (-not $msi) {
+            throw "No SupJav_*.msi installer was produced."
+          }
+
+          $msiOutput = Join-Path (Get-Location) "SupJav-Windows-x64.msi"
+          Copy-Item -LiteralPath $msi.FullName -Destination $msiOutput -Force
+
+          Write-Host "Build outputs:"
+          Get-Item $exe, $msiOutput | Select-Object Name, Length | Format-Table -AutoSize
+          Get-FileHash $exe -Algorithm SHA256
+          Get-FileHash $msiOutput -Algorithm SHA256
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
@@ -108,6 +130,6 @@ jobs:
           name: SupJav-Windows-x64
           path: |
             pake/SupJav.exe
-            pake/SupJav.msi
+            pake/SupJav-Windows-x64.msi
           if-no-files-found: error
           retention-days: 30

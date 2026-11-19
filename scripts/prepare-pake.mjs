@@ -36,9 +36,9 @@ await patchOnce(
 
 await patchOnce(
   'bin/helpers/merge.ts',
-  '  tauriConf.pake.system_tray[currentPlatform] = showSystemTray;',
+  '  tauriConf.pake.system_tray_path = trayIconPath;',
   [
-    '  tauriConf.pake.system_tray[currentPlatform] = showSystemTray;',
+    '  tauriConf.pake.system_tray_path = trayIconPath;',
     '',
     '  // SupJav: enable Pake built-in ad, tracker and cookie-notice filters.',
     '  Object.assign(tauriConf.pake, {',
